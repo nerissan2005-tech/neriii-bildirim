@@ -90,7 +90,7 @@ app.post("/notify-message", async (req, res) => {
     await m.ref.update({ pushed: true });
     const st = await db.collection("userdata").doc(d.to).collection("notify").doc("settings").get();
     if (st.exists && st.data().msgOn === false) return res.json({ ok: true, sent: 0 });
-    const body = d.sticker ? "Sana bir çıkartma gönderdi ✨" : (d.text || "").slice(0, 140);
+    const body = d.sticker ? "Sana bir çıkartma gönderdi ✨" : d.photo ? "📷 Fotoğraf gönderdi" + (d.text ? ": " + d.text.slice(0, 100) : "") : d.audio ? "🎤 Sesli mesaj gönderdi" : (d.text || "").slice(0, 140);
     const sent = await sendTo(d.to, { title: (d.fromName || "Neriii") + " sana yazdı", body, view: "messages", chatWith: d.from, tag: "msg-" + d.from });
     res.json({ ok: true, sent });
   } catch (e) {
