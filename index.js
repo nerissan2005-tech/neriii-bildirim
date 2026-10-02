@@ -49,10 +49,10 @@ function localParts(tz) {
 }
 const utcDay = k => { const [y, m, d] = k.split("-").map(Number); return Date.UTC(y, m - 1, d); };
 
-async function sendTo(uid, data, details) {
+async function sendTo(uid, data, details, skipTokens) {
   const col = db.collection("userdata").doc(uid).collection("tokens");
   const snap = await col.get();
-  const docs = snap.docs.filter(d => d.data().token);
+  const docs = snap.docs.filter(d => d.data().token && !(skipTokens && skipTokens.has(d.data().token)));
   if (!docs.length) return details ? { tokens: 0, sent: 0, errors: [] } : 0;
   const payload = {};
   Object.entries(data).forEach(([k, v]) => { if (v != null) payload[k] = String(v); });
@@ -109,7 +109,9 @@ app.post("/notify-message", async (req, res) => {
     const st = await db.collection("userdata").doc(d.to).collection("notify").doc("settings").get();
     if (st.exists && st.data().msgOn === false) return res.json({ ok: true, sent: 0 });
     const body = d.sticker ? "Sana bir çıkartma gönderdi ✨" : d.photo ? "📷 Fotoğraf gönderdi" + (d.text ? ": " + d.text.slice(0, 100) : "") : d.audio ? "🎤 Sesli mesaj gönderdi" : (d.text || "").slice(0, 140);
-    const sent = await sendTo(d.to, { title: (d.fromName || "Neriii") + " sana yazdı", body, view: "messages", chatWith: d.from, tag: "msg-" + d.from });
+    const fromSnap = await db.collection("userdata").doc(d.from).collection("tokens").get();
+    const skip = new Set(fromSnap.docs.map(x => x.data().token).filter(Boolean));
+    const sent = await sendTo(d.to, { title: (d.fromName || "Neriii") + " sana yazdı", body, view: "messages", chatWith: d.from, tag: "msg-" + d.from }, false, skip);
     res.json({ ok: true, sent });
   } catch (e) {
     res.status(401).json({ error: "oturum" });
