@@ -9,12 +9,11 @@ const messaging = admin.messaging();
 
 const ROOT_EMAIL = (process.env.ROOT_EMAIL || "neriii@nerii.app").toLowerCase();
 const CRON_KEY = process.env.CRON_KEY || "";
-const allowed = (process.env.ALLOWED_ORIGIN || "").split(",").map(s => s.trim()).filter(Boolean);
 const DAY_MS = 86400000;
 const PRAYER_NAMES = ["İnşirah Suresi'ni", "Yunus Duası'nı", "Hz. Musa'nın duasını", "İhlas Suresi'ni", "Kevser Suresi'ni", "Felak Suresi'ni", "Nas Suresi'ni"];
 
 const app = express();
-app.use(cors({ origin: (origin, cb) => cb(null, !origin || !allowed.length || allowed.includes(origin)) }));
+app.use(cors({ origin: true, allowedHeaders: ["Content-Type", "Authorization"], methods: ["GET", "POST", "OPTIONS"] }));
 app.use(express.json({ limit: "20kb" }));
 
 function rng(seed) {
@@ -50,11 +49,11 @@ function localParts(tz) {
 }
 const utcDay = k => { const [y, m, d] = k.split("-").map(Number); return Date.UTC(y, m - 1, d); };
 
-async function sendTo(uid, data) {
+async function sendTo(uid, data, details) {
   const col = db.collection("userdata").doc(uid).collection("tokens");
   const snap = await col.get();
   const docs = snap.docs.filter(d => d.data().token);
-  if (!docs.length) return 0;
+  if (!docs.length) return details ? { tokens: 0, sent: 0, errors: [] } : 0;
   const payload = {};
   Object.entries(data).forEach(([k, v]) => { if (v != null) payload[k] = String(v); });
   const res = await messaging.sendEachForMulticast({
@@ -68,6 +67,7 @@ async function sendTo(uid, data) {
     if (code === "messaging/registration-token-not-registered" || code === "messaging/invalid-registration-token" || code === "messaging/invalid-argument") dead.push(docs[i].ref.delete());
   });
   await Promise.all(dead);
+  if (details) return { tokens: docs.length, sent: res.successCount, errors: [...new Set(res.responses.filter(r => r.error).map(r => r.error.code))] };
   return res.successCount;
 }
 
@@ -77,6 +77,17 @@ async function authUser(req) {
 }
 
 app.get("/", (req, res) => res.json({ ok: true }));
+
+app.post("/test-push", async (req, res) => {
+  let user;
+  try { user = await authUser(req); } catch (e) { return res.status(401).json({ error: "oturum" }); }
+  try {
+    const r = await sendTo(user.uid, { title: "Neriii ♡", body: "Bildirimler bu cihazda çalışıyor 🎉", view: "settings", tag: "test" }, true);
+    res.json(Object.assign({ ok: true }, r));
+  } catch (e) {
+    res.status(500).json({ error: "gonderilemedi", detail: String(e.code || e.message || e) });
+  }
+});
 
 app.post("/notify-message", async (req, res) => {
   try {
