@@ -82,6 +82,13 @@ app.post("/test-push", async (req, res) => {
   let user;
   try { user = await authUser(req); } catch (e) { return res.status(401).json({ error: "oturum" }); }
   try {
+    const delay = Math.min(30, Math.max(0, Number((req.body && req.body.delay) || 0)));
+    if (delay) {
+      const snap = await db.collection("userdata").doc(user.uid).collection("tokens").get();
+      res.json({ ok: true, queued: true, tokens: snap.docs.filter(d => d.data().token).length });
+      setTimeout(() => { sendTo(user.uid, { title: "Neriii ♡", body: "Uygulama kapalıyken de bildirimler geliyor 🎉", view: "home", tag: "test2" }).catch(() => {}); }, delay * 1000);
+      return;
+    }
     const r = await sendTo(user.uid, { title: "Neriii ♡", body: "Bildirimler bu cihazda çalışıyor 🎉", view: "settings", tag: "test" }, true);
     res.json(Object.assign({ ok: true }, r));
   } catch (e) {
